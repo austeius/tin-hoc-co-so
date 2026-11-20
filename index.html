@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ôn Thi Tin Học Cơ Sở (Lập Trình C) - UTC</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- HEADER -->
+  <header>
+    <div class="logo-area">
+      <span class="logo-badge">UTC</span>
+      <h1 class="logo-title">Ôn Thi Tin Học Cơ Sở - Lập Trình C</h1>
+    </div>
+    <div class="header-stats">
+      <div class="stat-item">
+        <span>Tổng số:</span>
+        <strong id="stat-total" class="stat-val">113</strong>
+      </div>
+      <div class="stat-item">
+        <span>✅ Đã nắm:</span>
+        <strong id="stat-done" class="stat-val" style="color: #34d399;">0</strong>
+      </div>
+      <div class="stat-item">
+        <span>⚠️ Cần ôn lại:</span>
+        <strong id="stat-review" class="stat-val" style="color: #fbbf24;">0</strong>
+      </div>
+      <div class="stat-bar-container" title="Tiến độ hoàn thành">
+        <div id="stat-bar" class="stat-bar-fill"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- APP CONTAINER -->
+  <div class="app-container">
+    <!-- LEFT SIDEBAR: DANH SÁCH ĐỀ & CÂU HỎI -->
+    <aside class="sidebar">
+      <div class="sidebar-search-box">
+        <div class="search-input-wrapper">
+          <input 
+            type="text" 
+            id="search-input" 
+            class="search-input" 
+            placeholder="🔍 Tìm mã đề (vd: 2019_012), từ khóa..."
+            autocomplete="off"
+          >
+        </div>
+        <div class="filter-tabs">
+          <button class="filter-btn active" data-filter="all">Tất cả</button>
+          <button class="filter-btn" data-filter="review">⚠️ Cần ôn</button>
+          <button class="filter-btn" data-filter="done">✅ Đã nắm</button>
+          <button class="filter-btn" data-filter="todo">Chưa làm</button>
+        </div>
+      </div>
+      <div id="question-list" class="question-list-scroll">
+        <!-- Rendered by JS -->
+      </div>
+    </aside>
+
+    <!-- CENTER: WORKSPACE LÀM BÀI -->
+    <main class="main-workspace">
+      <!-- TOP ACTION BAR -->
+      <div class="workspace-top-bar">
+        <div class="q-breadcrumb">
+          <span id="curr-group" class="q-curr-group">Đề Word 2016_006</span>
+          <h2 id="curr-title" class="q-curr-title">Câu 1 · Căn của thương hai tổng</h2>
+        </div>
+        <div class="q-action-buttons">
+          <button id="btn-prev-q" class="btn" title="Câu trước">← Trước</button>
+          <button id="btn-next-q" class="btn" title="Câu sau">Sau →</button>
+          <button id="btn-mark-review" class="btn btn-mark-review" title="Đánh dấu cần ôn lại">⚠️ Cần ôn lại</button>
+          <button id="btn-mark-done" class="btn btn-mark-done" title="Đánh dấu đã nắm vững">✅ Đã nắm</button>
+        </div>
+      </div>
+
+      <!-- ĐỀ BÀI -->
+      <div class="card">
+        <div class="card-title">
+          <span>📝 Đề Bài</span>
+          <span id="curr-id-badge" style="font-size: 0.75rem; font-weight: normal; color: var(--text-muted); font-family: var(--font-mono);"></span>
+        </div>
+        <div id="curr-statement" class="statement-text"></div>
+        <div id="curr-notes" class="notes-alert" style="display: none;"></div>
+      </div>
+
+      <!-- Ô VIẾT CODE BÀI NHÁP -->
+      <div class="card">
+        <div class="editor-header">
+          <div class="card-title" style="margin-bottom: 0;">💻 Bài Nháp (Tự Viết Code C)</div>
+          <div class="editor-info">
+            <span id="save-status" class="save-badge">Đã lưu tự động</span>
+            <button id="btn-download-draft" class="btn" style="padding: 0.25rem 0.55rem; font-size: 0.78rem;" title="Tải bài nháp về máy dạng file .c">
+              ⬇️ Tải file .c
+            </button>
+            <button id="btn-reset-draft" class="btn" style="padding: 0.25rem 0.55rem; font-size: 0.78rem;" title="Xóa code nháp và viết lại từ đầu">
+              🔄 Viết lại
+            </button>
+          </div>
+        </div>
+        <textarea 
+          id="code-editor" 
+          class="editor-textarea" 
+          placeholder="// Viết bài làm của bạn ở đây...&#10;// Hệ thống tự động lưu nháp theo từng câu. Tải lại trang vẫn còn nguyên!" 
+          spellcheck="false"
+        ></textarea>
+      </div>
+
+      <!-- KHU VỰC LỜI GIẢI MẪU (BAN ĐẦU ẨN) -->
+      <div class="card">
+        <button id="btn-toggle-solution" class="solution-toggle-btn">
+          <span>👁️ Xem Lời Giải & Code Mẫu</span>
+        </button>
+
+        <div id="solution-section" class="solution-content">
+          <!-- Ý tưởng giải -->
+          <div>
+            <div class="card-title">💡 Ý Tưởng Giải Thuật</div>
+            <div id="curr-approach" class="approach-box"></div>
+          </div>
+
+          <!-- Code C mẫu -->
+          <div>
+            <div class="card-title">
+              <span>📄 Code C Chuẩn (templates/mau.c)</span>
+              <div style="display: flex; gap: 0.4rem;">
+                <button id="btn-copy-code" class="btn" style="padding: 0.25rem 0.55rem; font-size: 0.78rem;">
+                  📋 Sao chép code
+                </button>
+                <button id="btn-download-solution" class="btn" style="padding: 0.25rem 0.55rem; font-size: 0.78rem;">
+                  ⬇️ Tải file C mẫu
+                </button>
+              </div>
+            </div>
+            <div class="code-container">
+              <div class="code-toolbar">
+                <span id="curr-sol-file">solutions/de_word_2016_006_cau_1.c</span>
+                <span>C (C11 / UTF-8)</span>
+              </div>
+              <pre class="code-pre"><code id="curr-code"></code></pre>
+            </div>
+          </div>
+
+          <!-- Ví dụ đầu vào / đầu ra -->
+          <div>
+            <div class="card-title">📊 Ví Dụ Đầu Vào / Đầu Ra (Test Cases)</div>
+            <div id="curr-examples" class="examples-grid"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- RIGHT: HỎI AI (GIA SƯ MÔN TIN HỌC CƠ SỞ) -->
+    <aside class="ai-panel">
+      <!-- AI HEADER & MODEL SELECTOR -->
+      <div class="ai-header">
+        <div class="ai-title-row">
+          <div class="ai-title">
+            <span>🤖 Gia Sư AI</span>
+            <span style="font-size: 0.7rem; font-weight: normal; color: #7e22ce;">(Tin học cơ sở UTC)</span>
+          </div>
+        </div>
+        <div class="model-select-wrapper">
+          <select id="model-select" class="model-select" title="Chọn mô hình AI">
+            <option value="" disabled selected>Đang tải danh sách model...</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 3 NÚT HỖ TRỢ NHANH -->
+      <div class="ai-quick-actions">
+        <button id="btn-ai-hint" class="btn-ai-action" title="Đọc đề và code đang viết, gợi ý bước tiếp theo">
+          <span>💡</span> <strong>Gợi ý bước tiếp theo</strong>
+        </button>
+        <button id="btn-ai-find-bugs" class="btn-ai-action" title="Phân tích lỗi, giải thích vì sao và đưa test case nhỏ">
+          <span>🔍</span> <strong>Tìm lỗi trong code của tôi</strong>
+        </button>
+        <button id="btn-ai-explain" class="btn-ai-action" title="Bôi đen một đoạn code bất kỳ rồi bấm để được giải thích">
+          <span>📖</span> <strong>Giải thích đoạn code</strong>
+        </button>
+      </div>
+
+      <!-- CHAT STREAM BODY -->
+      <div id="ai-chat-body" class="ai-chat-body">
+        <div class="ai-empty-state">
+          👋 Chào bạn! Tôi là gia sư AI môn Tin học cơ sở C.<br><br>
+          Tôi có thể đọc đề câu này, xem code bạn đang viết để gợi ý từng bước, tìm lỗi hoặc giải thích cú pháp.<br><br>
+          <em>Hãy chọn nút hỗ trợ phía trên hoặc nhập câu hỏi bên dưới nhé!</em>
+        </div>
+      </div>
+
+      <!-- AI INPUT & SEND -->
+      <div class="ai-input-area">
+        <div id="ai-status-banner" style="display: none;" class="ai-banner-warn"></div>
+        <div class="ai-input-row">
+          <textarea 
+            id="ai-user-input" 
+            class="ai-input-text" 
+            placeholder="Nhập câu hỏi cho AI... (Enter để gửi, Shift+Enter xuống dòng)"
+          ></textarea>
+          <button id="btn-send-ai" class="btn-send" title="Gửi câu hỏi">Gửi</button>
+        </div>
+        <div class="ai-footer-actions">
+          <span>Hỏi tiếp trong cùng câu · Tự lưu chat</span>
+          <button id="btn-clear-chat" class="btn-clear-chat">Xóa chat câu này</button>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- SCRIPT DATA & APP LOGIC -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

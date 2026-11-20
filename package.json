@@ -1,0 +1,11 @@
+{
+  "name": "utc-tinhoc-onthi",
+  "version": "1.0.0",
+  "description": "Website ôn thi Tin học cơ sở bằng C - UTC",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {}
+}
