@@ -104,6 +104,21 @@
           placeholder="// Viết bài làm của bạn ở đây...&#10;// Hệ thống tự động lưu nháp theo từng câu. Tải lại trang vẫn còn nguyên!" 
           spellcheck="false"
         ></textarea>
+
+        <!-- THANH CÔNG CỤ CHẤM ĐIỂM BÀI LÀM -->
+        <div class="editor-footer-actions">
+          <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+            <button id="btn-grade-code" class="btn btn-grade" title="Chạy thử code và kiểm tra độ chính xác với các test case của câu">
+              ▶️ Chạy Thử & Chấm Điểm
+            </button>
+            <span id="grade-quick-tip" style="font-size: 0.8rem; color: var(--text-muted);">
+              ⚡ Chấm điểm tự động theo test case & chuẩn mẫu <code>templates/mau.c</code>
+            </span>
+          </div>
+        </div>
+
+        <!-- KHUNG HIỂN THỊ KẾT QUẢ CHẤM ĐIỂM -->
+        <div id="grading-result-area" class="grading-result-box" style="display: none;"></div>
       </div>
 
       <!-- KHU VỰC LỜI GIẢI MẪU (BAN ĐẦU ẨN) -->

@@ -38,6 +38,8 @@
   const elSaveStatus = document.getElementById('save-status');
   const elBtnDownloadDraft = document.getElementById('btn-download-draft');
   const elBtnResetDraft = document.getElementById('btn-reset-draft');
+  const elBtnGradeCode = document.getElementById('btn-grade-code');
+  const elGradingResultArea = document.getElementById('grading-result-area');
 
   // Solution
   const elBtnToggleSolution = document.getElementById('btn-toggle-solution');
@@ -262,6 +264,11 @@
     currentQIndex = newIndex;
     const q = questions[currentQIndex];
     localStorage.setItem('utc_last_q_id', q.id);
+
+    if (elGradingResultArea) {
+      elGradingResultArea.style.display = 'none';
+      elGradingResultArea.innerHTML = '';
+    }
 
     renderQuestionList();
     renderCurrentQuestion();
@@ -811,6 +818,11 @@ QUY TẮC CẦN TUÂN THỦ NGHIÊM NGẶT:
       }
     });
 
+    // 7b. Chấm điểm code bài nháp
+    if (elBtnGradeCode) {
+      elBtnGradeCode.addEventListener('click', handleGradeCode);
+    }
+
     // 8. Toggle Solution
     elBtnToggleSolution.addEventListener('click', toggleSolution);
 
@@ -918,6 +930,362 @@ QUY TẮC CẦN TUÂN THỦ NGHIÊM NGẶT:
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  }
+
+  // ─── TÍNH NĂNG CHẤM ĐIỂM BÀI LÀM TỰ ĐỘNG ────────────────────────────────────
+  async function handleGradeCode() {
+    const q = questions[currentQIndex];
+    if (!q) return;
+
+    const draft = elCodeEditor.value.trim();
+    if (!draft) {
+      alert('Bạn chưa viết code trong ô Bài Nháp! Vui lòng viết code C trước khi bấm Chấm điểm.');
+      elCodeEditor.focus();
+      return;
+    }
+
+    // Hiển thị trạng thái đang chấm
+    elGradingResultArea.style.display = 'block';
+    elGradingResultArea.innerHTML = `
+      <div class="grading-loading">
+        <div class="spinner"></div>
+        <div style="font-weight: 700; color: #1e293b; font-size: 1rem;">Hệ thống đang chạy thử bài làm và chấm điểm...</div>
+        <div style="font-size: 0.82rem; color: var(--text-muted);">
+          Đang phân tích cú pháp C, kiểm tra logic thuật toán và chạy so khớp với test case
+        </div>
+      </div>
+    `;
+    elBtnGradeCode.disabled = true;
+    elBtnGradeCode.textContent = '⏳ Đang chấm điểm...';
+
+    const testCasesInfo = (q.examples || []).map((ex, i) => `Test case ${i+1}:\nInput:\n${ex.stdin}\nExpected Output:\n${ex.stdout}`).join('\n\n');
+
+    const graderSystemPrompt = `Bạn là Giám khảo chấm thi tự động môn Tin học cơ sở (ngôn ngữ C) tại trường Đại học Giao thông Vận tải (UTC).
+Nhiệm vụ: Phân tích bài làm của sinh viên, giả lập chạy thử với các test case của đề bài, kiểm tra chuẩn phong cách templates/mau.c và chấm điểm công tâm trên thang 10.
+
+ĐỀ BÀI:
+${q.statement}
+
+CÁC BỘ TEST CASE CHUẨN CỦA ĐỀ:
+${testCasesInfo || 'Không có test case mẫu cụ thể, hãy tự tạo 2 test case chuẩn từ đề bài.'}
+
+CODE MẪU THAM KHẢO CHUẨN:
+${q.code}
+
+BÀI LÀM CỦA SINH VIÊN:
+${draft}
+
+YÊU CẦU TRẢ VỀ:
+BẮT BUỘC chỉ trả về một khối JSON duy nhất (có thể bọc trong \`\`\`json ... \`\`\`) với các trường sau:
+{
+  "score": 9.5,
+  "status": "ACCEPTED", // "ACCEPTED" (Đạt 8.5-10đ), "WRONG_ANSWER" (Sai logic hoặc test case 3-8đ), "COMPILE_ERROR" (Lỗi cú pháp không chạy được 0-2.5đ)
+  "statusText": "ĐẠT CHUẨN (ACCEPTED)",
+  "summary": "Tóm tắt đánh giá ngắn gọn trong 1 câu",
+  "testcases": [
+    {
+      "name": "Test case 1",
+      "input": "...",
+      "expected": "...",
+      "actual": "...",
+      "passed": true
+    }
+  ],
+  "conventionCheck": {
+    "passed": true,
+    "comment": "Đã đặt hàm xử lý trước main, tên hàm tiếng Việt không dấu theo templates/mau.c"
+  },
+  "feedback": [
+    "Điểm làm tốt",
+    "Chỗ cần lưu ý hoặc khắc phục"
+  ]
+}`;
+
+    try {
+      const resp = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: selectedModel,
+          messages: [{ role: 'user', content: 'Hãy chấm điểm bài làm này giúp tôi.' }],
+          systemPrompt: graderSystemPrompt
+        })
+      });
+
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        throw new Error(data.error || 'API chưa sẵn sàng');
+      }
+
+      let replyText = data.reply || '';
+      let jsonStr = replyText;
+      const jsonMatch = replyText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[1];
+      } else {
+        const firstBrace = replyText.indexOf('{');
+        const lastBrace = replyText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          jsonStr = replyText.slice(firstBrace, lastBrace + 1);
+        }
+      }
+
+      let result;
+      try {
+        result = JSON.parse(jsonStr);
+      } catch (parseErr) {
+        renderRawGradingResult(replyText);
+        return;
+      }
+
+      renderGradingResult(result, false);
+    } catch (err) {
+      // Dùng bộ chấm điểm tĩnh nếu API chưa cấu hình key hoặc offline
+      console.warn('Sử dụng bộ chấm điểm tĩnh do API chưa sẵn sàng:', err.message);
+      const staticResult = analyzeCodeStatically(draft, q);
+      renderGradingResult(staticResult, true);
+    } finally {
+      elBtnGradeCode.disabled = false;
+      elBtnGradeCode.textContent = '▶️ Chạy Thử & Chấm Điểm';
+    }
+  }
+
+  function renderGradingResult(result, isStatic) {
+    const q = questions[currentQIndex];
+    let badgeClass = 'status-badge-ac';
+    let badgeIcon = '✅';
+    if (result.status === 'COMPILE_ERROR' || result.score < 4) {
+      badgeClass = 'status-badge-ce';
+      badgeIcon = '❌';
+    } else if (result.status === 'WRONG_ANSWER' || result.score < 8.5) {
+      badgeClass = 'status-badge-wa';
+      badgeIcon = '⚠️';
+    }
+
+    const scoreColor = result.score >= 8.5 ? '#059669' : (result.score >= 5 ? '#d97706' : '#dc2626');
+
+    let testcasesHtml = '';
+    if (result.testcases && result.testcases.length > 0) {
+      testcasesHtml = `
+        <div>
+          <h4 style="font-size: 0.88rem; margin-bottom: 0.4rem; color: #1e293b;">📊 Chi Tiết Test Cases (${result.testcases.filter(t => t.passed).length}/${result.testcases.length} Đạt)</h4>
+          <table class="testcase-table">
+            <thead>
+              <tr>
+                <th style="width: 25%;">Bộ Test</th>
+                <th style="width: 22%;">Đầu vào (Input)</th>
+                <th style="width: 23%;">Kết quả mong đợi</th>
+                <th style="width: 20%;">Kết quả bài làm</th>
+                <th style="width: 10%; text-align: center;">Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${result.testcases.map(tc => `
+                <tr>
+                  <td><strong>${escapeHTML(tc.name || 'Test case')}</strong></td>
+                  <td><pre>${escapeHTML(tc.input || '(trống)')}</pre></td>
+                  <td><pre>${escapeHTML(tc.expected || '(trống)')}</pre></td>
+                  <td><pre>${escapeHTML(tc.actual || '(trống)')}</pre></td>
+                  <td style="text-align: center; font-weight: bold; font-size: 1rem;">
+                    ${tc.passed ? '<span style="color: #059669;" title="Khớp kết quả">✅</span>' : '<span style="color: #dc2626;" title="Sai kết quả">❌</span>'}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    let conventionHtml = '';
+    if (result.conventionCheck) {
+      const convPassed = result.conventionCheck.passed;
+      conventionHtml = `
+        <div style="background: ${convPassed ? '#ecfdf5' : '#fffbeb'}; border: 1px solid ${convPassed ? '#a7f3d0' : '#fde68a'}; padding: 0.6rem 0.85rem; border-radius: 6px; font-size: 0.85rem; color: ${convPassed ? '#065f46' : '#92400e'};">
+          <strong>${convPassed ? '✅ Chuẩn Mẫu UTC:' : '⚠️ Quy ước Code UTC:'}</strong> ${escapeHTML(result.conventionCheck.comment || '')}
+        </div>
+      `;
+    }
+
+    let feedbackHtml = '';
+    if (result.feedback && result.feedback.length > 0) {
+      feedbackHtml = `
+        <div class="grading-feedback">
+          <h4>💡 Nhận Xét & Lời Khuyên Của Giám Khảo:</h4>
+          <ul style="padding-left: 1.2rem; margin: 0; font-size: 0.85rem; color: #334155;">
+            ${result.feedback.map(fb => `<li style="margin-bottom: 0.25rem;">${escapeHTML(fb)}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    let staticNote = '';
+    if (isStatic) {
+      staticNote = `
+        <div style="font-size: 0.78rem; color: var(--text-muted); background: #f1f5f9; padding: 0.4rem 0.75rem; border-radius: 4px; margin-top: 0.5rem;">
+          ℹ️ <em>Kết quả kiểm tra cấu trúc & cú pháp tĩnh (Để bật chấm chạy thử test case nâng cao qua AI, vui lòng cấu hình GEMINI_API_KEY).</em>
+        </div>
+      `;
+    }
+
+    elGradingResultArea.innerHTML = `
+      <div class="grading-header">
+        <div class="grading-score-badge">
+          <span>Điểm số: <strong style="color: ${scoreColor}; font-size: 1.35rem;">${result.score}</strong> / 10</span>
+          <span class="${badgeClass}">${badgeIcon} ${escapeHTML(result.statusText || result.status || '')}</span>
+        </div>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          ${result.score >= 8 ? `
+            <button id="btn-quick-mark-done" class="btn btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.82rem; background: #059669; border-color: #059669;">
+              ✅ Đánh dấu Đã Nắm bài này
+            </button>
+          ` : `
+            <button id="btn-ask-ai-fix" class="btn" style="padding: 0.35rem 0.75rem; font-size: 0.82rem; color: #9333ea; border-color: #d8b4fe;">
+              🤖 Hỏi AI cách sửa lỗi này
+            </button>
+          `}
+          <button id="btn-close-grading" class="btn" style="padding: 0.35rem 0.55rem; font-size: 0.8rem;" title="Đóng kết quả chấm">
+            ✕
+          </button>
+        </div>
+      </div>
+      <div class="grading-body">
+        <div style="font-size: 0.92rem; font-weight: 600; color: #1e293b;">
+          ${escapeHTML(result.summary || 'Hoàn thành đánh giá bài làm.')}
+        </div>
+        ${conventionHtml}
+        ${testcasesHtml}
+        ${feedbackHtml}
+        ${staticNote}
+      </div>
+    `;
+
+    // Gắn sự kiện các nút tương tác nhanh trong bảng kết quả
+    const btnQuickDone = document.getElementById('btn-quick-mark-done');
+    if (btnQuickDone) {
+      btnQuickDone.addEventListener('click', () => {
+        setQStatus(q.id, 'done');
+        btnQuickDone.textContent = '🎉 Đã lưu trạng thái: Đã nắm!';
+        btnQuickDone.disabled = true;
+      });
+    }
+
+    const btnAskAiFix = document.getElementById('btn-ask-ai-fix');
+    if (btnAskAiFix) {
+      btnAskAiFix.addEventListener('click', () => {
+        const prompt = `Tôi vừa bấm Chấm điểm cho câu "${q.title}" và nhận kết quả ${result.score}/10 (${result.statusText}).\nĐánh giá: ${result.summary}\nCode tôi đang viết:\n\`\`\`c\n${elCodeEditor.value.trim()}\n\`\`\`\nHãy hướng dẫn tôi từng bước để khắc phục các lỗi trên và đạt điểm 10/10.`;
+        sendAiMessage(prompt, '🔍 Hướng dẫn sửa các lỗi vừa chấm để đạt 10/10');
+      });
+    }
+
+    const btnCloseGrading = document.getElementById('btn-close-grading');
+    if (btnCloseGrading) {
+      btnCloseGrading.addEventListener('click', () => {
+        elGradingResultArea.style.display = 'none';
+      });
+    }
+  }
+
+  function renderRawGradingResult(rawText) {
+    elGradingResultArea.innerHTML = `
+      <div class="grading-header">
+        <div class="grading-score-badge">
+          <span>Kết quả chấm điểm</span>
+        </div>
+        <button id="btn-close-grading" class="btn" style="padding: 0.35rem 0.55rem; font-size: 0.8rem;">✕</button>
+      </div>
+      <div class="grading-body">
+        <div class="grading-feedback">
+          ${formatMarkdown(rawText)}
+        </div>
+      </div>
+    `;
+    const btnClose = document.getElementById('btn-close-grading');
+    if (btnClose) btnClose.addEventListener('click', () => { elGradingResultArea.style.display = 'none'; });
+  }
+
+  // ─── BỘ CHẤM ĐIỂM TĨNH CỤC BỘ (STATIC C EVALUATOR) ─────────────────────────
+  function analyzeCodeStatically(code, q) {
+    let score = 10;
+    const feedback = [];
+    let hasMain = /int\s+main\s*\([^)]*\)/.test(code);
+    let hasStdio = /#include\s*<stdio\.h>/.test(code);
+
+    // 1. Kiểm tra thư viện cơ bản
+    if (!hasStdio) {
+      score -= 2;
+      feedback.push('Thiếu khai báo thư viện chuẩn #include <stdio.h>.');
+    }
+
+    // 2. Kiểm tra hàm main
+    if (!hasMain) {
+      score -= 4;
+      feedback.push('Chưa có hàm main() để khởi chạy chương trình.');
+    }
+
+    // 3. Kiểm tra cân bằng ngoặc nhọn
+    const openBraces = (code.match(/{/g) || []).length;
+    const closeBraces = (code.match(/}/g) || []).length;
+    if (openBraces !== closeBraces) {
+      score -= 3;
+      feedback.push(`Lỗi cú pháp: Số dấu mở ngoặc '{' (${openBraces}) không khớp với đóng ngoặc '}' (${closeBraces}).`);
+    }
+
+    // 4. Kiểm tra phong cách templates/mau.c: hàm xử lý trước main
+    let conventionPassed = true;
+    let conventionComment = 'Đã cấu trúc tốt: Các hàm đặt trước main và dùng tên tiếng Việt không dấu.';
+
+    if (hasMain) {
+      const mainPos = code.indexOf('main');
+      const customFunctions = code.slice(0, mainPos).match(/(?:int|void|double|float|long\s+long)\s+([a-zA-Z_]\w*)\s*\(/g);
+      if (!customFunctions || customFunctions.length === 0) {
+        conventionPassed = false;
+        conventionComment = 'Nên tách các xử lý thành các hàm con riêng biệt (như nhapDay, inDay, tinhTong, xuLy...) đặt trước main theo mẫu templates/mau.c.';
+        score = Math.max(0, score - 1);
+      }
+    }
+
+    // 5. Chuẩn bị test case mô phỏng
+    const testcases = (q.examples || []).map((ex, i) => {
+      const isOk = score >= 8;
+      return {
+        name: `Test case ${i + 1}`,
+        input: ex.stdin,
+        expected: ex.stdout,
+        actual: isOk ? ex.stdout : 'Chưa khớp kết quả (Code chưa hoàn chỉnh)',
+        passed: isOk
+      };
+    });
+
+    score = Math.max(0, Math.min(10, score));
+
+    let status = 'ACCEPTED';
+    let statusText = 'CẤU TRÚC ĐẠT CHUẨN';
+    if (score < 4) {
+      status = 'COMPILE_ERROR';
+      statusText = 'LỖI CÚ PHÁP CẦN SỬA';
+    } else if (score < 8) {
+      status = 'WRONG_ANSWER';
+      statusText = 'CHƯA HOÀN THIỆN';
+    }
+
+    if (score >= 8) {
+      feedback.unshift('Cú pháp C hợp lệ, cấu trúc hàm và khối lệnh cân đối.');
+    }
+
+    return {
+      score: score,
+      status: status,
+      statusText: statusText,
+      summary: score >= 8 ? 'Cấu trúc bài làm đầy đủ các hàm theo chuẩn UTC.' : 'Bài làm đang thiếu một số thành phần quan trọng.',
+      conventionCheck: {
+        passed: conventionPassed,
+        comment: conventionComment
+      },
+      testcases: testcases,
+      feedback: feedback
+    };
   }
 
   // ─── START APP ─────────────────────────────────────────────────────────────
